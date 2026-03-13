@@ -1,6 +1,7 @@
 const express = require('express');
 const { nanoid } = require('nanoid');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 
 // Подключаем Swagger
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -9,7 +10,7 @@ const swaggerUi = require('swagger-ui-express');
 const app = express();
 const port = 3003;
 
-// Middleware для CORS - разрешаем запросы от React (порт 3000)
+// Middleware для CORS
 app.use(cors({ 
     origin: "http://localhost:3000",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -31,17 +32,118 @@ app.use((req, res, next) => {
 });
 
 // ============================================
+// ФУНКЦИИ ДЛЯ ХЕШИРОВАНИЯ ПАРОЛЕЙ
+// ============================================
+
+async function hashPassword(password) {
+    const rounds = 10; // типичное значение для bcrypt
+    return bcrypt.hash(password, rounds);
+}
+
+async function verifyPassword(password, passwordHash) {
+    return bcrypt.compare(password, passwordHash);
+}
+
+// ============================================
+// БАЗА ДАННЫХ ПОЛЬЗОВАТЕЛЕЙ
+// ============================================
+let users = [
+    {
+        id: nanoid(6),
+        email: 'admin@teashop.ru',
+        first_name: 'Админ',
+        last_name: 'Чайный',
+        hashedPassword: '$2b$10$k06Hq7ZkfV4cPzGm8u7mEuR7r4Xx2p9mP0q3t1yZbCq9Lh5a8b1Qw' // пароль: admin123
+    }
+];
+
+// ============================================
+// БАЗА ДАННЫХ ТОВАРОВ
+// ============================================
+let puerProducts = [
+    { 
+        id: nanoid(6),
+        title: 'Шу Пуэр "Золотой брикет"', 
+        category: 'Шу Пуэр',
+        description: 'Мягкий, землистый вкус с нотками шоколада. Выдержка 5 лет.',
+        price: 1200
+    },
+    { 
+        id: nanoid(6),
+        title: 'Шен Пуэр "Дракон весны"', 
+        category: 'Шен Пуэр',
+        description: 'Свежий, травянистый с медовыми нотками. Молодой пуэр 2021 года.',
+        price: 2500
+    },
+    { 
+        id: nanoid(6),
+        title: 'Белый Пуэр "Серебряные иглы"', 
+        category: 'Белый Пуэр',
+        description: 'Нежный, цветочный аромат с оттенками дыни. Ручной сбор.',
+        price: 1800
+    },
+    { 
+        id: nanoid(6),
+        title: 'Шу Пуэр "Лао Ча Тоу"', 
+        category: 'Шу Пуэр',
+        description: 'Пуэрные комочки, плотный сладковатый вкус. Выдержка 8 лет.',
+        price: 3500
+    },
+    { 
+        id: nanoid(6),
+        title: 'Шен Пуэр "И У"', 
+        category: 'Шен Пуэр',
+        description: 'Классический регион, выдержанный, с оттенками сухофруктов. 2010 год.',
+        price: 4200
+    },
+    { 
+        id: nanoid(6),
+        title: 'Шу Пуэр "Мэнхай"', 
+        category: 'Шу Пуэр',
+        description: 'Знаменитая фабрика, классический вкус, шоколадно-ореховый.',
+        price: 2800
+    },
+    { 
+        id: nanoid(6),
+        title: 'Шен Пуэр "Си Шуан Бань На"', 
+        category: 'Шен Пуэр',
+        description: 'Дикие деревья, яркий фруктовый аромат, долгое послевкусие.',
+        price: 5500
+    },
+    { 
+        id: nanoid(6),
+        title: 'Пуэр в мандарине', 
+        category: 'Шу Пуэр',
+        description: 'Пуэр, прессованный в кожуре мандарина, цитрусовый аромат.',
+        price: 900
+    },
+    { 
+        id: nanoid(6),
+        title: 'Мини-точа "Утренняя роса"', 
+        category: 'Шу Пуэр',
+        description: 'Удобные гнезда для одной заварки, мягкий вкус.',
+        price: 600
+    },
+    { 
+        id: nanoid(6),
+        title: 'Шен Пуэр "Горы Цзиньма"', 
+        category: 'Шен Пуэр',
+        description: 'Элитный пуэр из старых деревьев, цветочный аромат.',
+        price: 6800
+    }
+];
+
+// ============================================
 // SWAGGER CONFIGURATION
 // ============================================
 
-// Swagger definition
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title: '🍵 API Чайной лавки (Пуэр)',
+            title: '🍵 API Чайной лавки с аутентификацией',
             version: '1.0.0',
-            description: 'API для управления коллекцией разных видов пуэра',
+            description: 'API для управления пользователями и товарами (пуэр)',
             contact: {
                 name: 'Чайная лавка',
                 email: 'info@teashop.ru'
@@ -55,50 +157,52 @@ const swaggerOptions = {
         ],
         components: {
             schemas: {
-                Product: {
+                User: {
                     type: 'object',
-                    required: ['name', 'category', 'price', 'stock'],
+                    required: ['email', 'first_name', 'last_name', 'password'],
                     properties: {
                         id: {
                             type: 'string',
-                            description: 'Уникальный ID товара',
-                            example: 'abc123'
+                            description: 'Уникальный ID пользователя'
                         },
-                        name: {
+                        email: {
                             type: 'string',
-                            description: 'Название пуэра',
-                            example: 'Шу Пуэр "Золотой брикет"'
+                            description: 'Email пользователя (логин)'
+                        },
+                        first_name: {
+                            type: 'string',
+                            description: 'Имя'
+                        },
+                        last_name: {
+                            type: 'string',
+                            description: 'Фамилия'
+                        }
+                    }
+                },
+                Product: {
+                    type: 'object',
+                    required: ['title', 'category', 'price'],
+                    properties: {
+                        id: {
+                            type: 'string',
+                            description: 'Уникальный ID товара'
+                        },
+                        title: {
+                            type: 'string',
+                            description: 'Название пуэра'
                         },
                         category: {
                             type: 'string',
                             description: 'Категория пуэра',
-                            enum: ['Шу Пуэр', 'Шен Пуэр', 'Белый Пуэр'],
-                            example: 'Шу Пуэр'
+                            enum: ['Шу Пуэр', 'Шен Пуэр', 'Белый Пуэр']
                         },
                         description: {
                             type: 'string',
-                            description: 'Описание товара',
-                            example: 'Мягкий, землистый вкус с нотками шоколада'
+                            description: 'Описание товара'
                         },
                         price: {
                             type: 'number',
-                            description: 'Цена в рублях',
-                            example: 1200
-                        },
-                        stock: {
-                            type: 'integer',
-                            description: 'Количество на складе',
-                            example: 15
-                        },
-                        rating: {
-                            type: 'number',
-                            description: 'Рейтинг товара (0-5)',
-                            example: 4.5
-                        },
-                        image: {
-                            type: 'string',
-                            description: 'URL изображения',
-                            example: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
+                            description: 'Цена в рублях'
                         }
                     }
                 },
@@ -115,18 +219,19 @@ const swaggerOptions = {
         },
         tags: [
             {
+                name: 'Auth',
+                description: 'Регистрация и авторизация'
+            },
+            {
                 name: 'Products',
                 description: 'Управление товарами (пуэр)'
             }
         ]
     },
-    // Путь к файлам с JSDoc комментариями
     apis: ['./server.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
-
-// Подключаем Swagger UI по адресу /api-docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
     customCss: '.swagger-ui .topbar { display: none }',
@@ -134,112 +239,18 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 // ============================================
-// БАЗА ДАННЫХ (минимум 10 товаров)
+// ФУНКЦИИ-ПОМОЩНИКИ
 // ============================================
-let puerProducts = [
-    { 
-        id: nanoid(6),
-        name: 'Шу Пуэр "Золотой брикет"', 
-        category: 'Шу Пуэр',
-        description: 'Мягкий, землистый вкус с нотками шоколада. Выдержка 5 лет.',
-        price: 1200,
-        stock: 15,
-        rating: 4.5,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Шен Пуэр "Дракон весны"', 
-        category: 'Шен Пуэр',
-        description: 'Свежий, травянистый с медовыми нотками. Молодой пуэр 2021 года.',
-        price: 2500,
-        stock: 8,
-        rating: 4.7,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Белый Пуэр "Серебряные иглы"', 
-        category: 'Белый Пуэр',
-        description: 'Нежный, цветочный аромат с оттенками дыни. Ручной сбор.',
-        price: 1800,
-        stock: 12,
-        rating: 4.8,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Шу Пуэр "Лао Ча Тоу"', 
-        category: 'Шу Пуэр',
-        description: 'Пуэрные комочки, плотный сладковатый вкус. Выдержка 8 лет.',
-        price: 3500,
-        stock: 5,
-        rating: 4.9,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Шен Пуэр "И У"', 
-        category: 'Шен Пуэр',
-        description: 'Классический регион, выдержанный, с оттенками сухофруктов. 2010 год.',
-        price: 4200,
-        stock: 3,
-        rating: 4.9,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Шу Пуэр "Мэнхай"', 
-        category: 'Шу Пуэр',
-        description: 'Знаменитая фабрика, классический вкус, шоколадно-ореховый.',
-        price: 2800,
-        stock: 10,
-        rating: 4.6,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Шен Пуэр "Си Шуан Бань На"', 
-        category: 'Шен Пуэр',
-        description: 'Дикие деревья, яркий фруктовый аромат, долгое послевкусие.',
-        price: 5500,
-        stock: 4,
-        rating: 4.8,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Пуэр в мандарине', 
-        category: 'Шу Пуэр',
-        description: 'Пуэр, прессованный в кожуре мандарина, цитрусовый аромат.',
-        price: 900,
-        stock: 20,
-        rating: 4.4,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Мини-точа "Утренняя роса"', 
-        category: 'Шу Пуэр',
-        description: 'Удобные гнезда для одной заварки, мягкий вкус.',
-        price: 600,
-        stock: 50,
-        rating: 4.3,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    },
-    { 
-        id: nanoid(6),
-        name: 'Шен Пуэр "Горы Цзиньма"', 
-        category: 'Шен Пуэр',
-        description: 'Элитный пуэр из старых деревьев, цветочный аромат.',
-        price: 6800,
-        stock: 2,
-        rating: 5.0,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
-    }
-];
 
-// Функция-помощник для поиска товара
+function findUserByEmail(email, res) {
+    const user = users.find(u => u.email === email);
+    if (!user) {
+        if (res) res.status(404).json({ error: "Пользователь не найден" });
+        return null;
+    }
+    return user;
+}
+
 function findProductOr404(id, res) {
     const product = puerProducts.find(p => p.id == id);
     if (!product) {
@@ -250,7 +261,183 @@ function findProductOr404(id, res) {
 }
 
 // ============================================
-// CRUD ОПЕРАЦИИ С SWAGGER ДОКУМЕНТАЦИЕЙ
+// МАРШРУТЫ ДЛЯ АУТЕНТИФИКАЦИИ
+// ============================================
+
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Регистрация нового пользователя
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - first_name
+ *               - last_name
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: user@example.com
+ *               first_name:
+ *                 type: string
+ *                 example: Иван
+ *               last_name:
+ *                 type: string
+ *                 example: Иванов
+ *               password:
+ *                 type: string
+ *                 example: qwerty123
+ *     responses:
+ *       201:
+ *         description: Пользователь успешно создан
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 first_name:
+ *                   type: string
+ *                 last_name:
+ *                   type: string
+ *       400:
+ *         description: Ошибка валидации или email уже существует
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+app.post("/api/auth/register", async (req, res) => {
+    const { email, first_name, last_name, password } = req.body;
+
+    // Проверка обязательных полей
+    if (!email || !first_name || !last_name || !password) {
+        return res.status(400).json({ 
+            error: "email, first_name, last_name and password are required" 
+        });
+    }
+
+    // Проверка, существует ли уже пользователь с таким email
+    const existingUser = users.find(u => u.email === email);
+    if (existingUser) {
+        return res.status(400).json({ error: "User with this email already exists" });
+    }
+
+    // Хешируем пароль и создаем пользователя
+    const hashedPassword = await hashPassword(password);
+    const newUser = {
+        id: nanoid(6),
+        email: email,
+        first_name: first_name,
+        last_name: last_name,
+        hashedPassword: hashedPassword
+    };
+
+    users.push(newUser);
+    
+    // Не возвращаем хеш пароля в ответе
+    const userResponse = {
+        id: newUser.id,
+        email: newUser.email,
+        first_name: newUser.first_name,
+        last_name: newUser.last_name
+    };
+    
+    res.status(201).json(userResponse);
+});
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Вход в систему
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: user@example.com
+ *               password:
+ *                 type: string
+ *                 example: qwerty123
+ *     responses:
+ *       200:
+ *         description: Успешный вход
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 login:
+ *                   type: boolean
+ *                   example: true
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     first_name:
+ *                       type: string
+ *                     last_name:
+ *                       type: string
+ *       400:
+ *         description: Отсутствуют обязательные поля
+ *       401:
+ *         description: Неверный пароль
+ *       404:
+ *         description: Пользователь не найден
+ */
+app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: "email and password are required" });
+    }
+
+    const user = findUserByEmail(email, res);
+    if (!user) return;
+
+    const isAuthenticated = await verifyPassword(password, user.hashedPassword);
+    
+    if (isAuthenticated) {
+        // Не возвращаем хеш пароля
+        const userResponse = {
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name
+        };
+        res.status(200).json({ 
+            login: true,
+            user: userResponse
+        });
+    } else {
+        res.status(401).json({ error: "Invalid password" });
+    }
+});
+
+// ============================================
+// CRUD ОПЕРАЦИИ ДЛЯ ТОВАРОВ
 // ============================================
 
 /**
@@ -295,10 +482,6 @@ app.get('/api/products', (req, res) => {
  *               $ref: '#/components/schemas/Product'
  *       404:
  *         description: Товар не найден
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
 app.get('/api/products/:id', (req, res) => {
     const id = req.params.id;
@@ -320,12 +503,11 @@ app.get('/api/products/:id', (req, res) => {
  *           schema:
  *             type: object
  *             required:
- *               - name
+ *               - title
  *               - category
  *               - price
- *               - stock
  *             properties:
- *               name:
+ *               title:
  *                 type: string
  *               category:
  *                 type: string
@@ -333,12 +515,6 @@ app.get('/api/products/:id', (req, res) => {
  *                 type: string
  *               price:
  *                 type: number
- *               stock:
- *                 type: integer
- *               rating:
- *                 type: number
- *               image:
- *                 type: string
  *     responses:
  *       201:
  *         description: Товар успешно создан
@@ -348,30 +524,23 @@ app.get('/api/products/:id', (req, res) => {
  *               $ref: '#/components/schemas/Product'
  *       400:
  *         description: Ошибка валидации
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
 app.post('/api/products', (req, res) => {
     try {
-        const { name, category, description, price, stock, rating, image } = req.body;
+        const { title, category, description, price } = req.body;
         
-        if (!name || !category || !price || !stock) {
+        if (!title || !category || !price) {
             return res.status(400).json({ 
-                error: 'Не все поля заполнены. Требуются: name, category, price, stock' 
+                error: 'Не все поля заполнены. Требуются: title, category, price' 
             });
         }
         
         const newProduct = {
             id: nanoid(6),
-            name: name.trim(),
+            title: title.trim(),
             category,
             description: description || '',
-            price: Number(price),
-            stock: Number(stock),
-            rating: rating || 0,
-            image: image || 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=200'
+            price: Number(price)
         };
         
         puerProducts.push(newProduct);
@@ -384,8 +553,8 @@ app.post('/api/products', (req, res) => {
 /**
  * @swagger
  * /api/products/{id}:
- *   patch:
- *     summary: Обновить товар
+ *   put:
+ *     summary: Полностью обновить товар
  *     tags: [Products]
  *     parameters:
  *       - in: path
@@ -400,8 +569,12 @@ app.post('/api/products', (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - title
+ *               - category
+ *               - price
  *             properties:
- *               name:
+ *               title:
  *                 type: string
  *               category:
  *                 type: string
@@ -409,12 +582,6 @@ app.post('/api/products', (req, res) => {
  *                 type: string
  *               price:
  *                 type: number
- *               stock:
- *                 type: integer
- *               rating:
- *                 type: number
- *               image:
- *                 type: string
  *     responses:
  *       200:
  *         description: Товар обновлен
@@ -424,28 +591,33 @@ app.post('/api/products', (req, res) => {
  *               $ref: '#/components/schemas/Product'
  *       404:
  *         description: Товар не найден
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-app.patch('/api/products/:id', (req, res) => {
+app.put('/api/products/:id', (req, res) => {
     try {
         const id = req.params.id;
-        const product = findProductOr404(id, res);
-        if (!product) return;
+        const index = puerProducts.findIndex(p => p.id === id);
         
-        const { name, category, description, price, stock, rating, image } = req.body;
+        if (index === -1) {
+            return res.status(404).json({ error: "Товар не найден" });
+        }
         
-        if (name !== undefined) product.name = name.trim();
-        if (category !== undefined) product.category = category;
-        if (description !== undefined) product.description = description;
-        if (price !== undefined) product.price = Number(price);
-        if (stock !== undefined) product.stock = Number(stock);
-        if (rating !== undefined) product.rating = Number(rating);
-        if (image !== undefined) product.image = image;
+        const { title, category, description, price } = req.body;
         
-        res.json(product);
+        if (!title || !category || !price) {
+            return res.status(400).json({ 
+                error: 'Не все поля заполнены. Требуются: title, category, price' 
+            });
+        }
+        
+        puerProducts[index] = {
+            id: id,
+            title: title.trim(),
+            category,
+            description: description || '',
+            price: Number(price)
+        };
+        
+        res.json(puerProducts[index]);
     } catch (error) {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
@@ -466,13 +638,9 @@ app.patch('/api/products/:id', (req, res) => {
  *         description: ID товара
  *     responses:
  *       204:
- *         description: Товар успешно удален (нет тела ответа)
+ *         description: Товар успешно удален
  *       404:
  *         description: Товар не найден
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
 app.delete('/api/products/:id', (req, res) => {
     const id = req.params.id;
@@ -484,37 +652,6 @@ app.delete('/api/products/:id', (req, res) => {
     
     puerProducts = puerProducts.filter(p => p.id !== id);
     res.status(204).send();
-});
-
-/**
- * @swagger
- * /api/products/category/{category}:
- *   get:
- *     summary: Получить товары по категории
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: category
- *         schema:
- *           type: string
- *         required: true
- *         description: Категория товара (Шу Пуэр, Шен Пуэр, Белый Пуэр)
- *     responses:
- *       200:
- *         description: Список товаров в категории
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Product'
- */
-app.get('/api/products/category/:category', (req, res) => {
-    const category = req.params.category;
-    const filtered = puerProducts.filter(p => 
-        p.category.toLowerCase() === category.toLowerCase()
-    );
-    res.json(filtered);
 });
 
 // 404 для всех остальных маршрутов
@@ -533,10 +670,11 @@ app.listen(port, () => {
     console.log(`🍵 Чайная лавка запущена на http://localhost:${port}`);
     console.log(`📚 Swagger документация: http://localhost:${port}/api-docs`);
     console.log('📦 Маршруты:');
-    console.log('   GET    /api/products');
-    console.log('   GET    /api/products/:id');
-    console.log('   POST   /api/products');
-    console.log('   PATCH  /api/products/:id');
-    console.log('   DELETE /api/products/:id');
-    console.log('   GET    /api/products/category/:category');
+    console.log('   POST   /api/auth/register  - регистрация');
+    console.log('   POST   /api/auth/login     - вход');
+    console.log('   GET    /api/products       - все товары');
+    console.log('   GET    /api/products/:id   - товар по ID');
+    console.log('   POST   /api/products       - создать товар');
+    console.log('   PUT    /api/products/:id   - обновить товар');
+    console.log('   DELETE /api/products/:id   - удалить товар');
 });
