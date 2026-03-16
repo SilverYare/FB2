@@ -2,6 +2,7 @@ const express = require('express');
 const { nanoid } = require('nanoid');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 // Подключаем Swagger
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -9,6 +10,17 @@ const swaggerUi = require('swagger-ui-express');
 
 const app = express();
 const port = 3003;
+
+// ============================================
+// JWT CONFIGURATION
+// ============================================
+const JWT_SECRET = "your-secret-key-change-this-in-production";
+const REFRESH_SECRET = "your-refresh-secret-key-change-this-in-production"; // <-- НОВОЕ
+const ACCESS_EXPIRES_IN = "15m"; // 15 минут
+const REFRESH_EXPIRES_IN = "7d";  // 7 дней <-- НОВОЕ
+
+// Хранилище активных refresh-токенов (в реальном проекте используй БД) <-- НОВОЕ
+let refreshTokens = new Set();
 
 // Middleware для CORS
 app.use(cors({ 
@@ -32,11 +44,60 @@ app.use((req, res, next) => {
 });
 
 // ============================================
+// ФУНКЦИИ ДЛЯ ГЕНЕРАЦИИ ТОКЕНОВ (ОБНОВЛЕНО)
+// ============================================
+function generateAccessToken(user) {
+    return jwt.sign(
+        { 
+            sub: user.id,
+            email: user.email
+        },
+        JWT_SECRET,
+        { expiresIn: ACCESS_EXPIRES_IN }
+    );
+}
+
+function generateRefreshToken(user) {
+    return jwt.sign(
+        { 
+            sub: user.id,
+            email: user.email
+        },
+        REFRESH_SECRET,
+        { expiresIn: REFRESH_EXPIRES_IN }
+    );
+}
+
+// ============================================
+// AUTH MIDDLEWARE
+// ============================================
+function authMiddleware(req, res, next) {
+    const header = req.headers.authorization || "";
+    
+    const [scheme, token] = header.split(" ");
+    
+    if (scheme !== "Bearer" || !token) {
+        return res.status(401).json({ 
+            error: "Missing or invalid Authorization header" 
+        });
+    }
+    
+    try {
+        const payload = jwt.verify(token, JWT_SECRET);
+        req.user = payload;
+        next();
+    } catch (err) {
+        return res.status(401).json({ 
+            error: "Invalid or expired token" 
+        });
+    }
+}
+
+// ============================================
 // ФУНКЦИИ ДЛЯ ХЕШИРОВАНИЯ ПАРОЛЕЙ
 // ============================================
-
 async function hashPassword(password) {
-    const rounds = 10; // типичное значение для bcrypt
+    const rounds = 10;
     return bcrypt.hash(password, rounds);
 }
 
@@ -136,12 +197,11 @@ let puerProducts = [
 // ============================================
 // SWAGGER CONFIGURATION
 // ============================================
-
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title: '🍵 API Чайной лавки с аутентификацией',
+            title: '🍵 API Чайной лавки с Refresh токенами',
             version: '1.0.0',
             description: 'API для управления пользователями и товарами (пуэр)',
             contact: {
@@ -156,76 +216,54 @@ const swaggerOptions = {
             }
         ],
         components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT'
+                }
+            },
             schemas: {
                 User: {
                     type: 'object',
                     required: ['email', 'first_name', 'last_name', 'password'],
                     properties: {
-                        id: {
-                            type: 'string',
-                            description: 'Уникальный ID пользователя'
-                        },
-                        email: {
-                            type: 'string',
-                            description: 'Email пользователя (логин)'
-                        },
-                        first_name: {
-                            type: 'string',
-                            description: 'Имя'
-                        },
-                        last_name: {
-                            type: 'string',
-                            description: 'Фамилия'
-                        }
+                        id: { type: 'string' },
+                        email: { type: 'string' },
+                        first_name: { type: 'string' },
+                        last_name: { type: 'string' }
                     }
                 },
                 Product: {
                     type: 'object',
                     required: ['title', 'category', 'price'],
                     properties: {
-                        id: {
-                            type: 'string',
-                            description: 'Уникальный ID товара'
-                        },
-                        title: {
-                            type: 'string',
-                            description: 'Название пуэра'
-                        },
-                        category: {
-                            type: 'string',
-                            description: 'Категория пуэра',
-                            enum: ['Шу Пуэр', 'Шен Пуэр', 'Белый Пуэр']
-                        },
-                        description: {
-                            type: 'string',
-                            description: 'Описание товара'
-                        },
-                        price: {
-                            type: 'number',
-                            description: 'Цена в рублях'
-                        }
+                        id: { type: 'string' },
+                        title: { type: 'string' },
+                        category: { type: 'string' },
+                        description: { type: 'string' },
+                        price: { type: 'number' }
+                    }
+                },
+                AuthResponse: {  // <-- НОВОЕ
+                    type: 'object',
+                    properties: {
+                        accessToken: { type: 'string' },
+                        refreshToken: { type: 'string' },
+                        user: { $ref: '#/components/schemas/User' }
                     }
                 },
                 Error: {
                     type: 'object',
                     properties: {
-                        error: {
-                            type: 'string',
-                            description: 'Сообщение об ошибке'
-                        }
+                        error: { type: 'string' }
                     }
                 }
             }
         },
         tags: [
-            {
-                name: 'Auth',
-                description: 'Регистрация и авторизация'
-            },
-            {
-                name: 'Products',
-                description: 'Управление товарами (пуэр)'
-            }
+            { name: 'Auth', description: 'Регистрация и авторизация' },
+            { name: 'Products', description: 'Управление товарами (пуэр)' }
         ]
     },
     apis: ['./server.js'],
@@ -241,11 +279,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 // ============================================
 // ФУНКЦИИ-ПОМОЩНИКИ
 // ============================================
-
 function findUserByEmail(email, res) {
     const user = users.find(u => u.email === email);
-    if (!user) {
-        if (res) res.status(404).json({ error: "Пользователь не найден" });
+    if (!user && res) {
+        res.status(404).json({ error: "Пользователь не найден" });
         return null;
     }
     return user;
@@ -261,7 +298,7 @@ function findProductOr404(id, res) {
 }
 
 // ============================================
-// МАРШРУТЫ ДЛЯ АУТЕНТИФИКАЦИИ
+// МАРШРУТЫ ДЛЯ АУТЕНТИФИКАЦИИ (ОБНОВЛЕНО)
 // ============================================
 
 /**
@@ -282,58 +319,28 @@ function findProductOr404(id, res) {
  *               - last_name
  *               - password
  *             properties:
- *               email:
- *                 type: string
- *                 example: user@example.com
- *               first_name:
- *                 type: string
- *                 example: Иван
- *               last_name:
- *                 type: string
- *                 example: Иванов
- *               password:
- *                 type: string
- *                 example: qwerty123
+ *               email: { type: string, example: user@example.com }
+ *               first_name: { type: string, example: Иван }
+ *               last_name: { type: string, example: Иванов }
+ *               password: { type: string, example: qwerty123 }
  *     responses:
- *       201:
- *         description: Пользователь успешно создан
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 first_name:
- *                   type: string
- *                 last_name:
- *                   type: string
- *       400:
- *         description: Ошибка валидации или email уже существует
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *       201: { description: Пользователь успешно создан }
+ *       400: { description: Ошибка валидации }
  */
 app.post("/api/auth/register", async (req, res) => {
     const { email, first_name, last_name, password } = req.body;
 
-    // Проверка обязательных полей
     if (!email || !first_name || !last_name || !password) {
         return res.status(400).json({ 
             error: "email, first_name, last_name and password are required" 
         });
     }
 
-    // Проверка, существует ли уже пользователь с таким email
     const existingUser = users.find(u => u.email === email);
     if (existingUser) {
         return res.status(400).json({ error: "User with this email already exists" });
     }
 
-    // Хешируем пароль и создаем пользователя
     const hashedPassword = await hashPassword(password);
     const newUser = {
         id: nanoid(6),
@@ -345,22 +352,19 @@ app.post("/api/auth/register", async (req, res) => {
 
     users.push(newUser);
     
-    // Не возвращаем хеш пароля в ответе
-    const userResponse = {
+    res.status(201).json({
         id: newUser.id,
         email: newUser.email,
         first_name: newUser.first_name,
         last_name: newUser.last_name
-    };
-    
-    res.status(201).json(userResponse);
+    });
 });
 
 /**
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Вход в систему
+ *     summary: Вход в систему (получение пары токенов)
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -372,40 +376,16 @@ app.post("/api/auth/register", async (req, res) => {
  *               - email
  *               - password
  *             properties:
- *               email:
- *                 type: string
- *                 example: user@example.com
- *               password:
- *                 type: string
- *                 example: qwerty123
+ *               email: { type: string, example: user@example.com }
+ *               password: { type: string, example: qwerty123 }
  *     responses:
  *       200:
  *         description: Успешный вход
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 login:
- *                   type: boolean
- *                   example: true
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     first_name:
- *                       type: string
- *                     last_name:
- *                       type: string
- *       400:
- *         description: Отсутствуют обязательные поля
- *       401:
- *         description: Неверный пароль
- *       404:
- *         description: Пользователь не найден
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401: { description: Неверные учетные данные }
  */
 app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
@@ -414,88 +394,44 @@ app.post("/api/auth/login", async (req, res) => {
         return res.status(400).json({ error: "email and password are required" });
     }
 
-    const user = findUserByEmail(email, res);
-    if (!user) return;
-
-    const isAuthenticated = await verifyPassword(password, user.hashedPassword);
-    
-    if (isAuthenticated) {
-        // Не возвращаем хеш пароля
-        const userResponse = {
-            id: user.id,
-            email: user.email,
-            first_name: user.first_name,
-            last_name: user.last_name
-        };
-        res.status(200).json({ 
-            login: true,
-            user: userResponse
-        });
-    } else {
-        res.status(401).json({ error: "Invalid password" });
+    const user = findUserByEmail(email);
+    if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
     }
-});
 
-// ============================================
-// CRUD ОПЕРАЦИИ ДЛЯ ТОВАРОВ
-// ============================================
+    const isValid = await verifyPassword(password, user.hashedPassword);
+    
+    if (!isValid) {
+        return res.status(401).json({ error: "Invalid credentials" });
+    }
 
-/**
- * @swagger
- * /api/products:
- *   get:
- *     summary: Получить все товары
- *     tags: [Products]
- *     responses:
- *       200:
- *         description: Список всех товаров
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Product'
- */
-app.get('/api/products', (req, res) => {
-    res.json(puerProducts);
-});
-
-/**
- * @swagger
- * /api/products/{id}:
- *   get:
- *     summary: Получить товар по ID
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         schema:
- *           type: string
- *         required: true
- *         description: ID товара
- *     responses:
- *       200:
- *         description: Данные товара
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Product'
- *       404:
- *         description: Товар не найден
- */
-app.get('/api/products/:id', (req, res) => {
-    const id = req.params.id;
-    const product = findProductOr404(id, res);
-    if (!product) return;
-    res.json(product);
+    // Генерируем оба токена
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    
+    // Сохраняем refresh токен
+    refreshTokens.add(refreshToken);
+    
+    const userResponse = {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name
+    };
+    
+    res.status(200).json({ 
+        accessToken,
+        refreshToken,  // <-- НОВОЕ
+        user: userResponse
+    });
 });
 
 /**
  * @swagger
- * /api/products:
+ * /api/auth/refresh:
  *   post:
- *     summary: Создать новый товар
- *     tags: [Products]
+ *     summary: Обновление пары токенов
+ *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -503,28 +439,144 @@ app.get('/api/products/:id', (req, res) => {
  *           schema:
  *             type: object
  *             required:
- *               - title
- *               - category
- *               - price
+ *               - refreshToken
  *             properties:
- *               title:
- *                 type: string
- *               category:
- *                 type: string
- *               description:
- *                 type: string
- *               price:
- *                 type: number
+ *               refreshToken: { type: string }
  *     responses:
- *       201:
- *         description: Товар успешно создан
+ *       200:
+ *         description: Новая пара токенов
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Product'
- *       400:
- *         description: Ошибка валидации
+ *               type: object
+ *               properties:
+ *                 accessToken: { type: string }
+ *                 refreshToken: { type: string }
+ *       401: { description: Невалидный refresh токен }
  */
+app.post("/api/auth/refresh", (req, res) => {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+        return res.status(400).json({ error: "refreshToken is required" });
+    }
+    
+    // Проверяем, есть ли токен в хранилище
+    if (!refreshTokens.has(refreshToken)) {
+        return res.status(401).json({ error: "Invalid refresh token" });
+    }
+    
+    try {
+        // Верифицируем refresh токен
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+        
+        // Находим пользователя
+        const user = users.find(u => u.id === payload.sub);
+        
+        if (!user) {
+            refreshTokens.delete(refreshToken);
+            return res.status(401).json({ error: "User not found" });
+        }
+        
+        // Ротация токенов: удаляем старый refresh, создаём новые
+        refreshTokens.delete(refreshToken);
+        
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+        
+        refreshTokens.add(newRefreshToken);
+        
+        res.json({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken
+        });
+        
+    } catch (err) {
+        // Если токен невалидный, удаляем его из хранилища
+        refreshTokens.delete(refreshToken);
+        return res.status(401).json({ error: "Invalid or expired refresh token" });
+    }
+});
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Выход из системы (инвалидация refresh токена)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken: { type: string }
+ *     responses:
+ *       200: { description: Успешный выход }
+ */
+app.post("/api/auth/logout", (req, res) => {
+    const { refreshToken } = req.body;
+    
+    if (refreshToken) {
+        refreshTokens.delete(refreshToken);
+    }
+    
+    res.json({ message: "Logged out successfully" });
+});
+
+/**
+ * @swagger
+ * /api/auth/me:
+ *   get:
+ *     summary: Получить информацию о текущем пользователе
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Данные пользователя
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       401: { description: Не авторизован }
+ */
+app.get("/api/auth/me", authMiddleware, (req, res) => {
+    const userId = req.user.sub;
+    const user = users.find(u => u.id === userId);
+    
+    if (!user) {
+        return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json({
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name
+    });
+});
+
+// ============================================
+// CRUD ОПЕРАЦИИ ДЛЯ ТОВАРОВ
+// ============================================
+
+// ... (все маршруты для товаров остаются без изменений) ...
+
+app.get('/api/products', (req, res) => {
+    res.json(puerProducts);
+});
+
+app.get('/api/products/:id', (req, res) => {
+    const id = req.params.id;
+    const product = findProductOr404(id, res);
+    if (!product) return;
+    res.json(product);
+});
+
 app.post('/api/products', (req, res) => {
     try {
         const { title, category, description, price } = req.body;
@@ -550,48 +602,6 @@ app.post('/api/products', (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /api/products/{id}:
- *   put:
- *     summary: Полностью обновить товар
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         schema:
- *           type: string
- *         required: true
- *         description: ID товара
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - title
- *               - category
- *               - price
- *             properties:
- *               title:
- *                 type: string
- *               category:
- *                 type: string
- *               description:
- *                 type: string
- *               price:
- *                 type: number
- *     responses:
- *       200:
- *         description: Товар обновлен
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Product'
- *       404:
- *         description: Товар не найден
- */
 app.put('/api/products/:id', (req, res) => {
     try {
         const id = req.params.id;
@@ -623,25 +633,6 @@ app.put('/api/products/:id', (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /api/products/{id}:
- *   delete:
- *     summary: Удалить товар
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         schema:
- *           type: string
- *         required: true
- *         description: ID товара
- *     responses:
- *       204:
- *         description: Товар успешно удален
- *       404:
- *         description: Товар не найден
- */
 app.delete('/api/products/:id', (req, res) => {
     const id = req.params.id;
     const exists = puerProducts.some(p => p.id === id);
@@ -671,7 +662,10 @@ app.listen(port, () => {
     console.log(`📚 Swagger документация: http://localhost:${port}/api-docs`);
     console.log('📦 Маршруты:');
     console.log('   POST   /api/auth/register  - регистрация');
-    console.log('   POST   /api/auth/login     - вход');
+    console.log('   POST   /api/auth/login     - вход (получение пары токенов)');
+    console.log('   POST   /api/auth/refresh   - обновление пары токенов');
+    console.log('   POST   /api/auth/logout    - выход');
+    console.log('   GET    /api/auth/me        - данные текущего пользователя');
     console.log('   GET    /api/products       - все товары');
     console.log('   GET    /api/products/:id   - товар по ID');
     console.log('   POST   /api/products       - создать товар');

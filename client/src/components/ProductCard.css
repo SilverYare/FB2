@@ -1,0 +1,111 @@
+.product-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.product-card__header {
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.product-card__title {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.product-card__category {
+    display: inline-block;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.product-card__body {
+    padding: 16px;
+    flex: 1;
+}
+
+.product-card__description {
+    margin: 0 0 12px 0;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.product-card__price {
+    margin: 0;
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+}
+
+.product-card__footer {
+    padding: 16px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.product-card__actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
+.btn-edit {
+    background: #4CAF50;
+    color: white;
+    padding: 6px 10px;
+}
+
+.btn-edit:hover {
+    background: #45a049;
+    transform: translateY(-2px);
+}
+
+.btn-delete {
+    background: #f44336;
+    color: white;
+    padding: 6px 10px;
+}
+
+.btn-delete:hover {
+    background: #d32f2f;
+    transform: translateY(-2px);
+}
