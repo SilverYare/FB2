@@ -1,0 +1,35 @@
+.profile-page {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.profile-card {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.profile-info {
+    margin-top: 20px;
+}
+
+.info-row {
+    display: flex;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.info-row label {
+    width: 100px;
+    font-weight: 500;
+}
+
+.info-row span {
+    flex: 1;
+}
+
+.user-id {
+    font-family: monospace;
+    color: #666;
+}

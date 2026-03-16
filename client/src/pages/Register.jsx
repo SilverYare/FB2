@@ -41,9 +41,17 @@ export default function Register() {
                 password: formData.password
             });
             
-            navigate('/login', { state: { message: 'Регистрация успешна! Войдите в систему.' } });
+            navigate('/login', { 
+                state: { message: '🎉 Регистрация успешна! Теперь можно войти.' } 
+            });
         } catch (err) {
-            setError(err.response?.data?.error || 'Ошибка при регистрации');
+            if (err.response) {
+                setError(err.response.data?.error || 'Ошибка при регистрации');
+            } else if (err.request) {
+                setError('Сервер не отвечает. Проверь, запущен ли сервер на порту 3003');
+            } else {
+                setError('Ошибка при отправке запроса');
+            }
         } finally {
             setLoading(false);
         }
@@ -52,8 +60,11 @@ export default function Register() {
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <h2>Регистрация</h2>
+                <h2>Создать аккаунт ✨</h2>
+                <div className="auth-subtitle">Присоединяйтесь к чайной лавке</div>
+                
                 {error && <div className="error-message">{error}</div>}
+                
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>Email</label>
@@ -62,9 +73,11 @@ export default function Register() {
                             name="email"
                             value={formData.email}
                             onChange={handleChange}
+                            placeholder="example@mail.ru"
                             required
                         />
                     </div>
+                    
                     <div className="form-row">
                         <div className="form-group">
                             <label>Имя</label>
@@ -73,9 +86,11 @@ export default function Register() {
                                 name="first_name"
                                 value={formData.first_name}
                                 onChange={handleChange}
+                                placeholder="Иван"
                                 required
                             />
                         </div>
+                        
                         <div className="form-group">
                             <label>Фамилия</label>
                             <input
@@ -83,10 +98,12 @@ export default function Register() {
                                 name="last_name"
                                 value={formData.last_name}
                                 onChange={handleChange}
+                                placeholder="Иванов"
                                 required
                             />
                         </div>
                     </div>
+                    
                     <div className="form-group">
                         <label>Пароль</label>
                         <input
@@ -94,9 +111,11 @@ export default function Register() {
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
+                            placeholder="••••••••"
                             required
                         />
                     </div>
+                    
                     <div className="form-group">
                         <label>Подтверждение пароля</label>
                         <input
@@ -104,16 +123,37 @@ export default function Register() {
                             name="confirmPassword"
                             value={formData.confirmPassword}
                             onChange={handleChange}
+                            placeholder="••••••••"
                             required
                         />
                     </div>
-                    <button type="submit" disabled={loading}>
-                        {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+                    
+                    {/* КРАСИВАЯ КНОПКА РЕГИСТРАЦИИ */}
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="btn btn-primary btn-block btn-register"
+                    >
+                        {loading ? (
+                            <span className="btn-loading">
+                                <span className="spinner"></span>
+                                Регистрация...
+                            </span>
+                        ) : (
+                            <span className="btn-text">
+                                Зарегистрироваться
+                                <span className="btn-icon">→</span>
+                            </span>
+                        )}
                     </button>
                 </form>
-                <p className="auth-link">
-                    Уже есть аккаунт? <Link to="/login">Войти</Link>
-                </p>
+                
+                <div className="auth-link-container">
+                    <div className="auth-link-text">Уже есть аккаунт?</div>
+                    <Link to="/login" className="auth-link">
+                        Войти
+                    </Link>
+                </div>
             </div>
         </div>
     );

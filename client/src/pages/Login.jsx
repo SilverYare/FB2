@@ -11,19 +11,19 @@ export default function Login() {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    
+
     const handleChange = (e) => {
         setFormData({
             ...formData,
             [e.target.name]: e.target.value
         });
     };
-    
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-        
+
         try {
             const response = await api.login(formData);
             const { accessToken, refreshToken, user } = response.data;
@@ -34,17 +34,26 @@ export default function Login() {
             
             navigate('/products');
         } catch (err) {
-            setError(err.response?.data?.error || 'Ошибка при входе');
+            if (err.response) {
+                setError(err.response.data?.error || `Ошибка ${err.response.status}`);
+            } else if (err.request) {
+                setError('Сервер не отвечает. Проверь, запущен ли сервер на порту 3003');
+            } else {
+                setError('Ошибка при отправке запроса');
+            }
         } finally {
             setLoading(false);
         }
     };
-    
+
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <h2>Вход в систему</h2>
+                <h2>Добро пожаловать! 👋</h2>
+                <div className="auth-subtitle">Войдите в свой аккаунт</div>
+                
                 {error && <div className="error-message">{error}</div>}
+                
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>Email</label>
@@ -53,9 +62,11 @@ export default function Login() {
                             name="email"
                             value={formData.email}
                             onChange={handleChange}
+                            placeholder="example@mail.ru"
                             required
                         />
                     </div>
+                    
                     <div className="form-group">
                         <label>Пароль</label>
                         <input
@@ -63,16 +74,27 @@ export default function Login() {
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
+                            placeholder="••••••••"
                             required
                         />
                     </div>
-                    <button type="submit" disabled={loading}>
+                    
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="btn btn-primary btn-block"
+                    >
                         {loading ? 'Вход...' : 'Войти'}
                     </button>
                 </form>
-                <p className="auth-link">
-                    Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-                </p>
+                
+                {/* Новая красивая плашка регистрации */}
+                <div className="auth-link-container">
+                    <div className="auth-link-text">Впервые у нас?</div>
+                    <Link to="/register" className="auth-link">
+                        Создать аккаунт →
+                    </Link>
+                </div>
             </div>
         </div>
     );
